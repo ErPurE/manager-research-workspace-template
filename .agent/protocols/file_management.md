@@ -35,6 +35,7 @@
 - `tasks/todo.json` 条目必须使用稳定 `id`；`area` 用于区分 `research` / `admin` / `personal`；`group` 用于 Dashboard 分组：`today` / `week` / `later` / `backlog` / `admin`
 - `status` 只使用 `todo` / `in_progress` / `waiting` / `blocked` / `paused` / `done` / `cancelled`
 - 同一目标、同一交付物或强依赖的一组事项优先合并为一个任务包，用 `checklist` 保存子项；避免 Dashboard 出现同类任务刷屏
+- `checklist` 子项可以是旧字符串，也可以是对象 `{ "text": "...", "done": false, "updated_at": "..." }`；后续新增或改写时优先使用对象格式，以便 Dashboard 单独标记子任务完成。
 - 已完成项可暂时保留为 `done`，周回顾时摘要归档到 `tasks/todo_archive.md` 后再从 JSON 中清理
 - `tasks/projects.md` 只记录论文 / 学位主项目
 - 若创建新灵感，更新 `notes/ideas/README.md`

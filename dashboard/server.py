@@ -821,9 +821,35 @@ def normalize_todo_item_for_agent(raw_item):
         "due_date": str(raw_item.get("due_date", "")).strip(),
         "tags": tags,
         "note": str(raw_item.get("note", "")).strip(),
-        "checklist": [str(entry).strip() for entry in checklist if str(entry).strip()],
+        "checklist": normalize_checklist_entries(checklist),
         "updated_at": now_iso(),
     }
+
+
+def normalize_checklist_entry(entry):
+    if isinstance(entry, dict):
+        text = str(entry.get("text") or entry.get("title") or "").strip()
+        if not text:
+            return None
+        normalized = {"text": text, "done": bool(entry.get("done", False))}
+        if entry.get("updated_at"):
+            normalized["updated_at"] = str(entry.get("updated_at")).strip()
+        return normalized
+    text = str(entry or "").strip()
+    if not text:
+        return None
+    return {"text": text, "done": False}
+
+
+def normalize_checklist_entries(checklist):
+    if not isinstance(checklist, list):
+        return []
+    entries = []
+    for entry in checklist:
+        normalized = normalize_checklist_entry(entry)
+        if normalized:
+            entries.append(normalized)
+    return entries
 
 
 def upsert_todo_item(raw_item):
@@ -999,6 +1025,15 @@ def update_todo(todo_id):
     next_status = payload.get("status")
     if next_status is not None and next_status not in TODO_STATUS_VALUES:
         return jsonify({"error": "Invalid status"}), 400
+    checklist_index = payload.get("checklist_index")
+    checklist_done = payload.get("checklist_done")
+    if checklist_index is not None:
+        try:
+            checklist_index = int(checklist_index)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid checklist index"}), 400
+        if not isinstance(checklist_done, bool):
+            return jsonify({"error": "Invalid checklist done value"}), 400
 
     data = load_todo_data()
     for item in data.get("items", []):
@@ -1010,6 +1045,13 @@ def update_todo(todo_id):
                 elif current_status == "done" and next_status != "done":
                     item.pop("previous_status", None)
                 item["status"] = next_status
+            if checklist_index is not None:
+                checklist = normalize_checklist_entries(item.get("checklist", []))
+                if checklist_index < 0 or checklist_index >= len(checklist):
+                    return jsonify({"error": "Checklist item not found"}), 404
+                checklist[checklist_index]["done"] = checklist_done
+                checklist[checklist_index]["updated_at"] = now_iso()
+                item["checklist"] = checklist
             item["updated_at"] = now_iso()
             write_json_file(TODO_FILE, data)
             return jsonify(item)

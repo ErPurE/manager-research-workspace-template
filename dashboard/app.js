@@ -185,6 +185,15 @@ function renderTodos(items) {
             toggleTodoStatus(button.dataset.todoToggle, button.dataset.nextStatus);
         });
     });
+    board.querySelectorAll('[data-checklist-toggle]').forEach(button => {
+        button.addEventListener('click', () => {
+            toggleChecklistItem(
+                button.dataset.checklistToggle,
+                Number(button.dataset.checklistIndex),
+                button.dataset.checklistDone === 'true'
+            );
+        });
+    });
 }
 
 function renderCompletedTodos(items) {
@@ -242,7 +251,7 @@ function renderTodoItem(item) {
     const nextStatus = status === 'done' ? (item.previous_status || 'todo') : 'done';
     const priority = Number(item.priority || 1);
     const tags = Array.isArray(item.tags) ? item.tags : [];
-    const checklist = Array.isArray(item.checklist) ? item.checklist : [];
+    const checklist = normalizeChecklist(item.checklist);
     const toggleTitle = status === 'done' ? '撤销完成' : '标记为完成';
     return `
         <article class="todo-item priority-${priority} status-${escapeHtml(status)}">
@@ -262,12 +271,50 @@ function renderTodoItem(item) {
                 ${item.note ? `<p class="todo-note">${escapeHtml(item.note)}</p>` : ''}
                 ${checklist.length ? `
                     <ul class="todo-checklist">
-                        ${checklist.map(entry => `<li>${escapeHtml(entry)}</li>`).join('')}
+                        ${checklist.map((entry, index) => renderChecklistItem(item.id, entry, index)).join('')}
                     </ul>
                 ` : ''}
                 ${tags.length ? `<div class="todo-tags">${tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
             </div>
         </article>
+    `;
+}
+
+function normalizeChecklist(checklist) {
+    if (!Array.isArray(checklist)) {
+        return [];
+    }
+    return checklist
+        .map(entry => {
+            if (entry && typeof entry === 'object') {
+                return {
+                    text: String(entry.text || entry.title || '').trim(),
+                    done: Boolean(entry.done)
+                };
+            }
+            return {
+                text: String(entry || '').trim(),
+                done: false
+            };
+        })
+        .filter(entry => entry.text);
+}
+
+function renderChecklistItem(todoId, entry, index) {
+    const nextDone = !entry.done;
+    const title = entry.done ? '标记为未完成' : '标记为已完成';
+    return `
+        <li class="todo-checklist-item ${entry.done ? 'is-done' : ''}">
+            <button class="subtask-check"
+                data-checklist-toggle="${escapeHtml(todoId)}"
+                data-checklist-index="${index}"
+                data-checklist-done="${nextDone}"
+                title="${title}"
+                aria-label="${title}">
+                ${entry.done ? '✓' : ''}
+            </button>
+            <span>${escapeHtml(entry.text)}</span>
+        </li>
     `;
 }
 
@@ -289,6 +336,30 @@ async function toggleTodoStatus(todoId, nextStatus) {
     } catch (error) {
         console.error('更新任务失败:', error);
         alert(`更新任务失败：${error.message}`);
+    }
+}
+
+async function toggleChecklistItem(todoId, checklistIndex, checklistDone) {
+    try {
+        const response = await fetch(`${API_BASE}/api/todos/${encodeURIComponent(todoId)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                checklist_index: checklistIndex,
+                checklist_done: checklistDone
+            })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || '更新失败');
+        }
+        await loadDashboard();
+        if (currentSection === 'tasks') {
+            await loadTodos();
+        }
+    } catch (error) {
+        console.error('更新子任务失败:', error);
+        alert(`更新子任务失败：${error.message}`);
     }
 }
 

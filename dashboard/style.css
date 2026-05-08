@@ -1000,14 +1000,62 @@ textarea:focus-visible {
 }
 
 .todo-checklist {
-    margin: 9px 0 0 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 10px 0 0;
+    padding: 0;
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 1.48;
+    list-style: none;
 }
 
-.todo-checklist li + li {
-    margin-top: 3px;
+.todo-checklist-item {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.todo-checklist-item span {
+    padding-top: 1px;
+}
+
+.todo-checklist-item.is-done span {
+    color: var(--text-muted);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+}
+
+.subtask-check {
+    width: 18px;
+    height: 18px;
+    display: inline-grid;
+    place-items: center;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 6px;
+    color: var(--text-inverse);
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 850;
+    line-height: 1;
+    transition: background 180ms var(--ease), border-color 180ms var(--ease), transform 180ms var(--ease);
+}
+
+.subtask-check:hover {
+    border-color: var(--accent-color);
+    background: var(--accent-soft);
+}
+
+.subtask-check:active {
+    transform: scale(0.94);
+}
+
+.todo-checklist-item.is-done .subtask-check {
+    border-color: var(--success-color);
+    background: var(--success-color);
 }
 
 .todo-tags {
