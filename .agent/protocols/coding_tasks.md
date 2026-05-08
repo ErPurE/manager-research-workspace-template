@@ -25,6 +25,7 @@
 - Windows 上修改 `.bat` 文件时尽量使用 ASCII + CRLF；修改前端 JSON/Markdown 数据后必须验证中文没有变成 `?` 或乱码
 - Dashboard API 密钥只能存在 `.agent/runtime/local_api_profiles.json` 这类本机 runtime 文件中；不得写入 README、代码、任务 JSON、handoff 或 git tracked 文件
 - 低价 API/Claude Code 只能通过后端受限 action plan 处理缓存，不允许让模型直接执行 shell 或写任意路径
+- 修改 Dashboard 前端外观时，优先做科研工作台式的中性、清晰、可扫描界面；避免大面积蓝紫渐变、玻璃拟态、过圆卡片和“一眼 AI 模板”的视觉组合。
 
 ## handoff 必写项
 

@@ -1,5 +1,16 @@
 {
   "schema_version": 1,
-  "last_updated": "",
-  "experiences": []
+  "last_updated": "2026-05-08",
+  "experiences": [
+    {
+      "id": "exp-001",
+      "title": "Dashboard 前端避免蓝紫 AI 模板感",
+      "applies_to": [
+        "coding_tasks"
+      ],
+      "rule": "美化 Dashboard 时优先采用中性浅灰、纸感白、墨绿、琥珀等多色但克制的科研工作台风格；减少大面积蓝紫渐变、强玻璃拟态、过圆卡片和夸张 hover 动画。",
+      "source": "GitHub issue #1",
+      "last_confirmed": "2026-05-08"
+    }
+  ]
 }

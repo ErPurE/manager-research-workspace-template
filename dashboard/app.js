@@ -139,7 +139,7 @@ async function loadTodos() {
         console.error('加载待办失败:', error);
         board.innerHTML = `
             <div class="empty-state">
-                <div class="empty-state-icon">⚠️</div>
+                <div class="empty-state-icon">ERR</div>
                 <div class="empty-state-text">待办加载失败，请检查 tasks/todo.json</div>
             </div>
         `;
@@ -338,7 +338,7 @@ async function loadFiles(category, gridId) {
         if (files.length === 0) {
             grid.innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-state-icon">📂</div>
+                    <div class="empty-state-icon">EMPTY</div>
                     <div class="empty-state-text">暂无内容</div>
                 </div>
             `;
@@ -362,7 +362,7 @@ async function loadFiles(category, gridId) {
         console.error(`加载 ${category} 失败:`, error);
         grid.innerHTML = `
             <div class="empty-state">
-                <div class="empty-state-icon">⚠️</div>
+                <div class="empty-state-icon">ERR</div>
                 <div class="empty-state-text">加载失败，请检查服务器</div>
             </div>
         `;
@@ -574,7 +574,7 @@ function renderInboxList(containerId, items, compact) {
     if (!items.length) {
         container.innerHTML = `
             <div class="empty-state small">
-                <div class="empty-state-icon">📭</div>
+                <div class="empty-state-icon">EMPTY</div>
                 <div class="empty-state-text">缓存区是空的</div>
             </div>
         `;
@@ -631,7 +631,7 @@ function renderInboxError(containerId, message) {
     }
     container.innerHTML = `
         <div class="empty-state small">
-            <div class="empty-state-icon">⚠️</div>
+            <div class="empty-state-icon">ERR</div>
             <div class="empty-state-text">${escapeHtml(message)}</div>
         </div>
     `;
@@ -1108,7 +1108,7 @@ function toggleTheme() {
     localStorage.setItem('theme', newTheme);
 
     const icon = document.querySelector('.theme-icon');
-    icon.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+    icon.textContent = newTheme === 'dark' ? 'LIGHT' : 'DARK';
 }
 
 (function initTheme() {
@@ -1117,7 +1117,7 @@ function toggleTheme() {
 
     const icon = document.querySelector('.theme-icon');
     if (icon) {
-        icon.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        icon.textContent = savedTheme === 'dark' ? 'LIGHT' : 'DARK';
     }
 })();
 
