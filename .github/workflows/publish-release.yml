@@ -1,0 +1,41 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - "manager-template-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+
+      - name: Build release archive
+        run: |
+          git archive --format=zip --output="${GITHUB_REF_NAME}.zip" HEAD
+          sha256sum "${GITHUB_REF_NAME}.zip" > "${GITHUB_REF_NAME}.zip.sha256"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#manager-template-}"
+          notes_file="RELEASE_NOTES_${version}.md"
+          if [ -f "$notes_file" ]; then
+            gh release create "$GITHUB_REF_NAME" \
+              "${GITHUB_REF_NAME}.zip" \
+              "${GITHUB_REF_NAME}.zip.sha256" \
+              --title "Manager Research Workspace Template ${version}" \
+              --notes-file "$notes_file"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              "${GITHUB_REF_NAME}.zip" \
+              "${GITHUB_REF_NAME}.zip.sha256" \
+              --title "Manager Research Workspace Template ${version}" \
+              --generate-notes
+          fi
