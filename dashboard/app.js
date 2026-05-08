@@ -39,7 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
     initCaptureForm();
     initFileModal();
     initAgentPanel();
-    loadDashboard();
+    const initialSection = getSectionFromHash();
+    if (initialSection && document.getElementById(initialSection)) {
+        showSection(initialSection);
+    } else {
+        loadDashboard();
+    }
 });
 
 // ===== 导航 =====
@@ -56,6 +61,9 @@ function initNavigation() {
 
 function showSection(sectionId) {
     currentSection = sectionId;
+    if (window.location.hash !== `#${sectionId}`) {
+        history.replaceState(null, '', `#${sectionId}`);
+    }
 
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.section === sectionId);
@@ -88,6 +96,10 @@ function showSection(sectionId) {
             loadFiles('notes', 'notes-grid');
             break;
     }
+}
+
+function getSectionFromHash() {
+    return window.location.hash.replace('#', '').trim();
 }
 
 // ===== 加载数据 =====

@@ -21,6 +21,26 @@
 4. 在 Dashboard 里开始录入任务、灵感、指导记录和笔记。
 5. 打开 `.agent/profile.md`，填入你自己的研究背景、写作偏好和协作习惯。
 
+## 界面预览
+
+以下截图来自空模板工作区，不包含私人任务、画像、研究记录或 API key。
+
+**总览与快速录入**
+
+![Dashboard overview](docs/images/dashboard-overview.png)
+
+**Todo 面板**
+
+![Todo board](docs/images/todo-board.png)
+
+**API Agent 配置与预览**
+
+![API Agent panel](docs/images/api-agent.png)
+
+**缓存区**
+
+![Inbox panel](docs/images/inbox.png)
+
 ## 日常怎么用
 
 - **总览**：查看任务、灵感、指导记录、笔记和待处理缓存数量。
@@ -114,6 +134,10 @@ You do not need to understand every file before using it. Open the Dashboard, ca
 - Markdown notes for guidance, ideas, research, and long-term context.
 - API Agent profiles for OpenAI-compatible and Anthropic-compatible providers.
 - Preview-before-apply workflow so low-cost models do not directly mutate your workspace.
+
+## Screenshots
+
+The screenshots above are captured from an empty template workspace, so they contain no private tasks, profile, research records, or API keys.
 
 ## Why The Agent Folder Matters
 
