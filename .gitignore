@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+.agent/temp_search_results.json
+.agent/runtime/local_api_profiles.json
+.agent/runtime/agent_runs/
+tmpclaude-*
+~$*.xlsx

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎓 科研管理中心</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <div class="logo">
+            <span class="logo-icon">🎓</span>
+            <span class="logo-text">科研管理</span>
+        </div>
+        
+        <nav class="nav-menu">
+            <button class="nav-item active" data-section="dashboard">
+                <span class="nav-icon">📊</span>
+                <span class="nav-text">总览</span>
+            </button>
+            <button class="nav-item" data-section="inbox">
+                <span class="nav-icon">📥</span>
+                <span class="nav-text">缓存区</span>
+            </button>
+            <button class="nav-item" data-section="agent">
+                <span class="nav-icon">🔌</span>
+                <span class="nav-text">API Agent</span>
+            </button>
+            <button class="nav-item" data-section="ideas">
+                <span class="nav-icon">💡</span>
+                <span class="nav-text">灵感库</span>
+            </button>
+            <button class="nav-item" data-section="tasks">
+                <span class="nav-icon">✅</span>
+                <span class="nav-text">任务</span>
+            </button>
+            <button class="nav-item" data-section="guidance">
+                <span class="nav-icon">🎯</span>
+                <span class="nav-text">导师指导</span>
+            </button>
+            <button class="nav-item" data-section="notes">
+                <span class="nav-icon">📝</span>
+                <span class="nav-text">笔记</span>
+            </button>
+        </nav>
+        
+        <div class="sidebar-footer">
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </div>
+    </aside>
+    
+    <!-- 主内容区 -->
+    <main class="main-content">
+        <!-- 总览页 -->
+        <section id="dashboard" class="section active">
+            <div class="welcome-banner">
+                <span class="welcome-text">👋 你好，欢迎回到你的科研空间。</span>
+            </div>
+            <h1 class="section-title">📊 总览</h1>
+            <div class="dashboard-grid">
+                <div class="stat-card" onclick="showSection('ideas')">
+                    <div class="stat-icon">💡</div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="ideas-count">-</div>
+                        <div class="stat-label">灵感</div>
+                    </div>
+                </div>
+                <div class="stat-card" onclick="showSection('tasks')">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="tasks-count">-</div>
+                        <div class="stat-label">任务</div>
+                    </div>
+                </div>
+                <div class="stat-card" onclick="showSection('guidance')">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="guidance-count">-</div>
+                        <div class="stat-label">指导记录</div>
+                    </div>
+                </div>
+                <div class="stat-card" onclick="showSection('notes')">
+                    <div class="stat-icon">📝</div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="notes-count">-</div>
+                        <div class="stat-label">笔记</div>
+                    </div>
+                </div>
+                <div class="stat-card" onclick="showSection('inbox')">
+                    <div class="stat-icon">📥</div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="inbox-count">-</div>
+                        <div class="stat-label">待处理缓存</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="workspace-grid">
+                <div class="workspace-panel capture-panel">
+                    <div class="panel-header">
+                        <h2>快速录入</h2>
+                        <span class="status-pill" id="capture-status">草稿自动保存</span>
+                    </div>
+                    <div class="segmented-control" id="capture-kind-tabs">
+                        <button class="segment active" data-kind="idea">灵感</button>
+                        <button class="segment" data-kind="task">任务</button>
+                        <button class="segment" data-kind="guidance">导师消息</button>
+                        <button class="segment" data-kind="note">笔记</button>
+                        <button class="segment" data-kind="freeform">自由输入</button>
+                    </div>
+                    <div class="capture-form">
+                        <input class="text-input" id="capture-title" type="text" placeholder="标题">
+                        <textarea class="text-area" id="capture-body" rows="8" placeholder="先原样记下来，Agent 下次启动时会接管整理"></textarea>
+                        <div class="form-grid">
+                            <input class="text-input" id="capture-project" type="text" placeholder="关联项目">
+                            <input class="text-input" id="capture-tags" type="text" placeholder="标签，用逗号分隔">
+                            <select class="text-input" id="capture-priority">
+                                <option value="">优先级</option>
+                                <option value="high">高</option>
+                                <option value="medium">中</option>
+                                <option value="low">低</option>
+                            </select>
+                            <input class="text-input" id="capture-due-date" type="date">
+                        </div>
+                        <div class="form-actions">
+                            <button class="action-btn" id="capture-submit">存入缓存区</button>
+                            <button class="secondary-btn" id="capture-clear">清空草稿</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="workspace-panel inbox-panel">
+                    <div class="panel-header">
+                        <h2>Agent 缓存区</h2>
+                        <div class="panel-actions">
+                            <button class="secondary-btn compact" onclick="showSection('agent')">API处理</button>
+                            <button class="secondary-btn compact" onclick="loadInbox()">刷新</button>
+                        </div>
+                    </div>
+                    <div class="inbox-summary">
+                        <span>待处理 <strong id="inbox-pending-count">0</strong></span>
+                        <span>失败 <strong id="inbox-failed-count">0</strong></span>
+                        <span>已取消 <strong id="inbox-cancelled-count">0</strong></span>
+                    </div>
+                    <div class="inbox-list compact-list" id="dashboard-inbox-list"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 缓存区 -->
+        <section id="inbox" class="section">
+            <h1 class="section-title">📥 Agent 缓存区</h1>
+            <div class="workspace-panel">
+                <div class="panel-header">
+                    <h2>待 Agent 接管的输入</h2>
+                    <div class="panel-actions">
+                        <button class="action-btn compact" onclick="showSection('agent')">API处理缓存</button>
+                        <button class="secondary-btn compact" onclick="showSection('dashboard')">新建输入</button>
+                    </div>
+                </div>
+                <div class="inbox-summary">
+                    <span>待处理 <strong id="inbox-page-pending-count">0</strong></span>
+                    <span>失败 <strong id="inbox-page-failed-count">0</strong></span>
+                    <span>已取消 <strong id="inbox-page-cancelled-count">0</strong></span>
+                    <span>已处理 <strong id="inbox-page-processed-count">0</strong></span>
+                </div>
+                <div class="inbox-list" id="inbox-list"></div>
+            </div>
+        </section>
+
+        <!-- API Agent -->
+        <section id="agent" class="section">
+            <h1 class="section-title">🔌 API Agent</h1>
+            <div class="agent-layout">
+                <div class="workspace-panel">
+                    <div class="panel-header">
+                        <h2>API 配置</h2>
+                        <span class="status-pill" id="agent-profile-status">未加载</span>
+                    </div>
+                    <div class="agent-profile-list" id="agent-profile-list"></div>
+                    <input type="hidden" id="agent-profile-id">
+                    <div class="form-grid">
+                        <input class="text-input" id="agent-profile-name" type="text" placeholder="配置名称，例如 deepseek / claude">
+                        <select class="text-input" id="agent-provider">
+                            <option value="openai">OpenAI-compatible</option>
+                            <option value="anthropic">Anthropic-compatible</option>
+                        </select>
+                        <input class="text-input" id="agent-base-url" type="url" placeholder="Base URL，例如 https://api.example.com">
+                        <input class="text-input" id="agent-model" type="text" placeholder="模型名，例如 gpt-4.1 / claude-3-5-sonnet">
+                    </div>
+                    <input class="text-input api-key-input" id="agent-api-key" type="password" placeholder="API Key，留空则保留旧密钥">
+                    <div class="form-actions">
+                        <button class="action-btn" id="agent-save-profile">保存配置</button>
+                        <button class="secondary-btn" id="agent-clear-profile">清空表单</button>
+                    </div>
+                </div>
+
+                <div class="workspace-panel">
+                    <div class="panel-header">
+                        <h2>处理缓存区</h2>
+                        <span class="status-pill" id="agent-run-status">待命</span>
+                    </div>
+                    <div class="agent-run-controls">
+                        <select class="text-input" id="agent-active-profile"></select>
+                        <button class="secondary-btn" id="agent-test-profile">测试连接</button>
+                        <button class="action-btn" id="agent-preview-run">生成预览</button>
+                        <button class="secondary-btn" id="agent-apply-run" disabled>应用预览</button>
+                    </div>
+                    <pre class="agent-output" id="agent-run-output">先保存一个 API 配置，然后点击“生成预览”。预览确认后再应用到任务、指导记录和缓存状态。</pre>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 灵感库 -->
+        <section id="ideas" class="section">
+            <h1 class="section-title">💡 灵感库</h1>
+            <div class="file-grid" id="ideas-grid"></div>
+        </section>
+        
+        <!-- 任务管理 -->
+        <section id="tasks" class="section">
+            <h1 class="section-title">✅ 任务管理</h1>
+            <div class="section-toolbar">
+                <button class="action-btn compact" onclick="startCapture('task')">新任务录入</button>
+                <button class="secondary-btn compact" onclick="loadTodos()">刷新</button>
+            </div>
+            <div class="todo-board" id="tasks-board"></div>
+        </section>
+        
+        <!-- 导师指导 -->
+        <section id="guidance" class="section">
+            <h1 class="section-title">🎯 导师指导</h1>
+            <div class="file-grid" id="guidance-grid"></div>
+        </section>
+        
+        <!-- 研究笔记 -->
+        <section id="notes" class="section">
+            <h1 class="section-title">📝 研究笔记</h1>
+            <div class="file-grid" id="notes-grid"></div>
+        </section>
+    </main>
+    
+    <!-- 文件查看器弹窗 -->
+    <div class="modal" id="file-modal">
+            <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">文件内容</h2>
+                <div class="modal-actions">
+                    <button class="secondary-btn compact active" id="preview-mode-btn">预览</button>
+                    <button class="secondary-btn compact" id="edit-mode-btn">编辑</button>
+                    <label class="review-toggle">
+                        <input type="checkbox" id="agent-review-toggle">
+                        <span>Agent 复查</span>
+                    </label>
+                    <button class="action-btn compact hidden" id="file-save-btn">保存</button>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+            </div>
+            <div class="modal-status" id="modal-status"></div>
+            <div class="modal-body">
+                <div class="markdown-body" id="modal-preview"></div>
+                <textarea class="file-editor hidden" id="modal-editor"></textarea>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

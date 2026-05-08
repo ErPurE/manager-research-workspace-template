@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "last_updated": "",
+  "status_values": [
+    "blocked",
+    "cancelled",
+    "done",
+    "in_progress",
+    "paused",
+    "todo",
+    "waiting"
+  ],
+  "priority_values": [
+    1,
+    2,
+    3
+  ],
+  "items": []
+}
