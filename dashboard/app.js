@@ -177,6 +177,7 @@ function renderTodos(items) {
         <div class="todo-columns">
             ${groups.map(([group, title, subtitle]) => renderTodoGroup(group, title, subtitle, activeItems)).join('')}
         </div>
+        ${renderCompletedTodos(doneItems)}
     `;
 
     board.querySelectorAll('[data-todo-toggle]').forEach(button => {
@@ -184,6 +185,33 @@ function renderTodos(items) {
             toggleTodoStatus(button.dataset.todoToggle, button.dataset.nextStatus);
         });
     });
+}
+
+function renderCompletedTodos(items) {
+    const doneItems = [...items].sort((a, b) => {
+        const dateDiff = String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+        if (dateDiff !== 0) {
+            return dateDiff;
+        }
+        return String(a.title || '').localeCompare(String(b.title || ''), 'zh-CN');
+    });
+
+    return `
+        <section class="completed-todos">
+            <div class="completed-todos-header">
+                <div>
+                    <h2>已完成，可撤销</h2>
+                    <p>误点完成后，从这里恢复到完成前状态</p>
+                </div>
+                <span>${doneItems.length}</span>
+            </div>
+            <div class="completed-todos-list">
+                ${doneItems.length ? doneItems.map(renderTodoItem).join('') : `
+                    <div class="todo-empty">暂无已完成任务</div>
+                `}
+            </div>
+        </section>
+    `;
 }
 
 function renderTodoGroup(group, title, subtitle, items) {
@@ -211,13 +239,14 @@ function renderTodoGroup(group, title, subtitle, items) {
 
 function renderTodoItem(item) {
     const status = item.status || 'todo';
-    const nextStatus = status === 'done' ? 'todo' : 'done';
+    const nextStatus = status === 'done' ? (item.previous_status || 'todo') : 'done';
     const priority = Number(item.priority || 1);
     const tags = Array.isArray(item.tags) ? item.tags : [];
     const checklist = Array.isArray(item.checklist) ? item.checklist : [];
+    const toggleTitle = status === 'done' ? '撤销完成' : '标记为完成';
     return `
         <article class="todo-item priority-${priority} status-${escapeHtml(status)}">
-            <button class="todo-check" data-todo-toggle="${escapeHtml(item.id)}" data-next-status="${nextStatus}" title="切换完成状态">
+            <button class="todo-check" data-todo-toggle="${escapeHtml(item.id)}" data-next-status="${escapeHtml(nextStatus)}" title="${toggleTitle}" aria-label="${toggleTitle}">
                 ${status === 'done' ? '✓' : ''}
             </button>
             <div class="todo-main">
@@ -575,6 +604,7 @@ function renderInboxList(containerId, items, compact) {
                     <button class="secondary-btn compact" data-inbox-action="edit" data-id="${escapeHtml(item.id)}">修改</button>
                     <button class="danger-btn compact" data-inbox-action="cancel" data-id="${escapeHtml(item.id)}">取消</button>
                 ` : ''}
+                ${compact ? '' : `<button class="danger-btn compact" data-inbox-action="delete" data-id="${escapeHtml(item.id)}">删除记录</button>`}
             </div>
         </article>
     `).join('');
@@ -587,6 +617,8 @@ function renderInboxList(containerId, items, compact) {
                 editInboxItem(id);
             } else if (button.dataset.inboxAction === 'cancel') {
                 cancelInboxItem(id);
+            } else if (button.dataset.inboxAction === 'delete') {
+                deleteInboxItem(id);
             }
         });
     });
@@ -636,6 +668,34 @@ async function cancelInboxItem(id) {
     } catch (error) {
         console.error('取消缓存项失败:', error);
         alert(`取消失败：${error.message}`);
+    }
+}
+
+async function deleteInboxItem(id) {
+    const item = inboxItemsById.get(id);
+    const status = item?.status || '';
+    const message = status === 'pending'
+        ? '确定彻底删除这条 pending 缓存记录吗？这通常只适合测试条目。'
+        : '确定从缓存区历史中删除这条记录吗？正式归档内容不会被删除。';
+    if (!confirm(message)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/inbox/${encodeURIComponent(id)}?hard=1`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || '删除失败');
+        }
+        await loadDashboard();
+        if (currentSection === 'inbox') {
+            await loadInbox();
+        }
+    } catch (error) {
+        console.error('删除缓存记录失败:', error);
+        alert(`删除失败：${error.message}`);
     }
 }
 

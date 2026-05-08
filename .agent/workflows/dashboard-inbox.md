@@ -73,10 +73,14 @@ Dashboard 提供可视化 API Agent 面板，用来让低价 OpenAI-compatible /
 - API 调用产生的预览记录保存在 `.agent/runtime/agent_runs/`，该目录必须保持 gitignored。
 - 前端只展示 masked API key；旧密钥留空保存时由后端沿用，不把明文回传给浏览器。
 - 模型不能直接写文件或执行命令；它只能返回 JSON action plan。
-- 允许的 action type 是 `upsert_todo`、`replace_json`、`write_text`、`replace_text`、`process_inbox`。
+- 允许的 action type 是 `write_idea`、`write_guidance`、`write_note`、`upsert_todo`、`replace_json`、`write_text`、`replace_text`、`process_inbox`。
 - 处理任务类缓存时优先使用 `upsert_todo`，不要为了新增一个任务让模型输出完整 `tasks/todo.json`；这会造成 token 浪费，也容易让 API 网关在计费后断开连接。
+- 处理 `idea` 时优先使用 `write_idea`，不要把 speculative idea 自动变成 todo；只有明确包含“今天做/本周完成/帮我安排/截止”等执行性语言时，才额外生成 `upsert_todo`。
+- 处理 `guidance` 时优先使用 `write_guidance` 保存原始指导；只有明确行动项才额外同步任务。
+- 处理 `note` / `freeform` 时优先按知识内容使用 `write_note`；只有明显是任务时才写 todo。
 - 后端只允许写受限路径：`tasks/todo.json`、`guidance/README.md`、`guidance/`、`notes/`、`research/`，以及必要的 `.agent/runtime/active_context.md`、`.agent/runtime/handoff_note.md`、`.agent/memory/tasks.json`。
 - 推荐先点“生成预览”，人工确认 plan 后再点“应用预览”；不要默认自动应用低价模型输出。
 - 如果 API 模型输出含糊、造证据、破坏 schema、中文乱码或 action path 越界，必须拒绝应用并改由人工/Codex 处理。
 - 若出现 `API HTTP 403 / 1010`，优先判断为服务商网关拦截客户端指纹或 Base URL 不是实际 API endpoint；先用 Dashboard 的“测试连接”验证 profile，再检查是否应改用真实 API 子域名、完整 `/v1` endpoint 或不拦截服务端调用的供应商。
 - 若出现 `Remote end closed connection without response`，通常表示供应商已接收并可能计费，但生成/回传响应时被网关超时或断流；先压缩 prompt、限制输出、使用 `upsert_todo` 等细粒度 action，并查看 `.agent/runtime/agent_runs/` 中保存的 failed run。
+- 前端缓存区提供“删除记录”按钮：适合清理测试条目。pending 的 hard delete 会直接移除原始缓存；processed/failed/cancelled 的 hard delete 只移除 runtime 历史记录，不删除已经归档到正式目录的内容。

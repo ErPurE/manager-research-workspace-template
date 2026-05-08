@@ -727,7 +727,26 @@ body {
     overflow: hidden;
 }
 
+.completed-todos {
+    margin-top: 18px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
 .todo-column-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-card);
+}
+
+.completed-todos-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -742,7 +761,18 @@ body {
     line-height: 1.25;
 }
 
+.completed-todos-header h2 {
+    font-size: 16px;
+    line-height: 1.25;
+}
+
 .todo-column-header p {
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.completed-todos-header p {
     margin-top: 3px;
     color: var(--text-muted);
     font-size: 12px;
@@ -762,9 +792,30 @@ body {
     font-weight: 700;
 }
 
+.completed-todos-header span {
+    min-width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+}
+
 .todo-list {
     display: flex;
     flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+}
+
+.completed-todos-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 10px;
     padding: 12px;
 }
@@ -812,6 +863,24 @@ body {
 
 .todo-check:hover {
     border-color: var(--accent-color);
+}
+
+.todo-item.status-done {
+    opacity: 0.82;
+}
+
+.todo-item.status-done .todo-check {
+    background: var(--success-color);
+    border-color: var(--success-color);
+    color: white;
+}
+
+.todo-item.status-done .todo-title-row h3 {
+    color: var(--text-muted);
+}
+
+.todo-item.status-done .todo-status {
+    color: var(--success-color);
 }
 
 .todo-title-row {

@@ -77,6 +77,9 @@ AGENT_ALLOWED_ACTIONS = {
     "replace_json",
     "write_text",
     "replace_text",
+    "write_idea",
+    "write_guidance",
+    "write_note",
     "upsert_todo",
     "process_inbox",
 }
@@ -545,6 +548,18 @@ def find_pending_inbox_file(item_id):
     return None, None
 
 
+def find_inbox_file_any_status(item_id):
+    ensure_runtime_dirs()
+    search_roots = [PENDING_DIR, FAILED_DIR, CANCELLED_DIR, PROCESSED_DIR]
+    for root in search_roots:
+        paths = root.rglob("*.json") if root == PROCESSED_DIR else root.glob("*.json")
+        for path in paths:
+            item = read_inbox_json(path)
+            if item and item.get("id") == item_id:
+                return path, item
+    return None, None
+
+
 def backup_markdown_file(full_path):
     timestamp = datetime.now().astimezone()
     date_dir = timestamp.strftime("%Y-%m-%d")
@@ -600,10 +615,34 @@ def compact_todos_for_prompt(max_items=24):
     }
 
 
+def compact_file_index(relative_dir, max_items=12):
+    directory = WORKSPACE_ROOT / relative_dir
+    if not directory.exists():
+        return []
+    files = []
+    for path in directory.glob("*.md"):
+        if path.name == "README.md":
+            continue
+        files.append(
+            {
+                "path": workspace_relative_path(path),
+                "title": path.stem,
+                "modified": path.stat().st_mtime,
+            }
+        )
+    files.sort(key=lambda item: item["modified"], reverse=True)
+    return [
+        {"path": item["path"], "title": item["title"]}
+        for item in files[:max_items]
+    ]
+
+
 def build_agent_prompt(items):
     pending_json = json.dumps(items, ensure_ascii=False, indent=2)
     allowed_paths = sorted(AGENT_WRITE_EXACT_PATHS)
     todo_context = json.dumps(compact_todos_for_prompt(), ensure_ascii=False, indent=2)
+    idea_index = json.dumps(compact_file_index("notes/ideas"), ensure_ascii=False, indent=2)
+    guidance_index = json.dumps(compact_file_index("guidance"), ensure_ascii=False, indent=2)
     prompt = f"""
 You are helping maintain a local research-management workspace from Dashboard cache items.
 
@@ -612,9 +651,13 @@ Never invent source evidence. Preserve existing JSON schemas, IDs, task grouping
 Use UTF-8 Chinese text directly. Do not write mojibake or question-mark replacements.
 Do not ask for shell commands. Only propose the allowed actions below.
 Prefer granular actions such as upsert_todo. Do not use replace_json for tasks/todo.json unless a granular action cannot express the change.
+Route by each cache item's kind first. Do not turn every input into a todo.
 
 Allowed action types:
 - upsert_todo: {{"type":"upsert_todo","item":{{"title":"...","area":"research|admin|personal","group":"today|week|later|backlog|admin","status":"todo","priority":1,"note":"...","tags":[],"checklist":[]}}}}
+- write_idea: {{"type":"write_idea","title":"...","content":"markdown body","tags":["..."],"priority":"low|medium|high"}}
+- write_guidance: {{"type":"write_guidance","title":"...","content":"markdown body","source":"advisor|meeting|collaborator|other"}}
+- write_note: {{"type":"write_note","title":"...","content":"markdown body","folder":"notes|research"}}
 - replace_json: {{"type":"replace_json","path":"tasks/todo.json","content":{{...}}}}
 - write_text: {{"type":"write_text","path":"guidance/YYYY-MM-DD-short-title.md","content":"..."}}
 - replace_text: {{"type":"replace_text","path":"guidance/README.md","content":"..."}}
@@ -635,9 +678,19 @@ Important local rules:
 - Keep similar work merged into task packages where practical.
 - For reimbursement, purchase, travel, forms, or administrative chores, use area "admin" and group "admin".
 - Always add process_inbox actions for cache items you handled.
+- kind=idea: preserve it as an idea with write_idea. Do not add upsert_todo for speculative language such as "可以试试", "maybe", "possible", or "idea". Add upsert_todo only when the item explicitly asks to schedule/execute work (for example "今天做", "本周完成", "帮我安排任务", "截止").
+- kind=guidance: first preserve it as guidance with write_guidance. Add upsert_todo only for clear action items extracted from the guidance.
+- kind=note or freeform: use write_note when it is knowledge/context; use upsert_todo only when it is clearly a task.
+- kind=file_edit_review: do not rewrite the edited file unless synchronization is needed; propose only necessary index/task/handoff updates.
 
 Current compact todo context:
 {todo_context}
+
+Recent idea files:
+{idea_index}
+
+Recent guidance files:
+{guidance_index}
 
 Pending cache items:
 {pending_json}
@@ -659,6 +712,27 @@ def safe_agent_write_path(raw_path):
     if full_path.suffix.lower() not in {".md", ".json", ".txt"}:
         raise ValueError(f"Agent action file type is not allowed: {normalized}")
     return normalized, full_path
+
+
+def safe_slug(value, fallback):
+    text = str(value or "").strip().lower()
+    text = re.sub(r"[\s_]+", "-", text)
+    text = re.sub(r"[^a-z0-9\u4e00-\u9fff-]+", "", text)
+    text = text.strip("-")
+    if not text:
+        text = fallback
+    return text[:60]
+
+
+def dated_markdown_path(folder, title):
+    date_prefix = now_iso()[:10]
+    slug = safe_slug(title, uuid.uuid4().hex[:8])
+    path = WORKSPACE_ROOT / folder / f"{date_prefix}-{slug}.md"
+    counter = 2
+    while path.exists():
+        path = WORKSPACE_ROOT / folder / f"{date_prefix}-{slug}-{counter}.md"
+        counter += 1
+    return path
 
 
 def normalize_agent_plan(plan):
@@ -776,6 +850,74 @@ def upsert_todo_item(raw_item):
     return item["id"]
 
 
+def write_structured_markdown(folder, title, content, prefix_lines=None):
+    title = str(title or "").strip() or "Untitled"
+    body = str(content or "").strip()
+    path = dated_markdown_path(folder, title)
+    lines = [f"# {title}", ""]
+    if prefix_lines:
+        lines.extend(prefix_lines)
+        lines.append("")
+    if body:
+        lines.append(body)
+    else:
+        lines.append("_No content provided._")
+    atomic_write_text(path, "\n".join(lines).rstrip() + "\n")
+    return workspace_relative_path(path)
+
+
+def apply_structured_content_action(action):
+    action_type = action.get("type")
+    if action_type == "write_idea":
+        tags = action.get("tags", [])
+        if not isinstance(tags, list):
+            tags = normalize_tags(tags)
+        priority = str(action.get("priority", "medium")).strip() or "medium"
+        prefix = [
+            f"- 日期: {now_iso()[:10]}",
+            f"- 标签: {' '.join('#' + str(tag).strip() for tag in tags if str(tag).strip())}",
+            f"- 优先级: {priority}",
+            "",
+            "## 描述",
+        ]
+        return write_structured_markdown(
+            "notes/ideas",
+            action.get("title", "New idea"),
+            action.get("content", ""),
+            prefix,
+        )
+    if action_type == "write_guidance":
+        source = str(action.get("source", "other")).strip() or "other"
+        prefix = [
+            f"- 日期: {now_iso()[:10]}",
+            f"- 来源: {source}",
+            "",
+            "## 记录",
+        ]
+        return write_structured_markdown(
+            "guidance",
+            action.get("title", "Guidance note"),
+            action.get("content", ""),
+            prefix,
+        )
+    if action_type == "write_note":
+        folder = str(action.get("folder", "notes")).strip().replace("\\", "/")
+        if folder not in {"notes", "research"}:
+            folder = "notes"
+        prefix = [
+            f"- 日期: {now_iso()[:10]}",
+            "",
+            "## 内容",
+        ]
+        return write_structured_markdown(
+            folder,
+            action.get("title", "Research note"),
+            action.get("content", ""),
+            prefix,
+        )
+    raise ValueError(f"Unsupported structured content action: {action_type}")
+
+
 def apply_agent_actions(plan):
     applied = []
     for action in normalize_agent_plan(plan)["actions"]:
@@ -801,6 +943,9 @@ def apply_agent_actions(plan):
         elif action_type == "upsert_todo":
             todo_id = upsert_todo_item(action.get("item", {}))
             applied.append({"type": action_type, "path": "tasks/todo.json", "todo_id": todo_id})
+        elif action_type in {"write_idea", "write_guidance", "write_note"}:
+            path = apply_structured_content_action(action)
+            applied.append({"type": action_type, "path": path})
         elif action_type == "process_inbox":
             target = mark_inbox_processed(
                 action.get("id"),
@@ -859,6 +1004,11 @@ def update_todo(todo_id):
     for item in data.get("items", []):
         if item.get("id") == todo_id:
             if next_status is not None:
+                current_status = item.get("status", "todo")
+                if next_status == "done" and current_status != "done":
+                    item["previous_status"] = current_status
+                elif current_status == "done" and next_status != "done":
+                    item.pop("previous_status", None)
                 item["status"] = next_status
             item["updated_at"] = now_iso()
             write_json_file(TODO_FILE, data)
@@ -1096,6 +1246,14 @@ def update_inbox(item_id):
 @app.route("/api/inbox/<item_id>", methods=["DELETE"])
 def cancel_inbox(item_id):
     """取消 pending 条目，但保留记录"""
+    hard_delete = request.args.get("hard") in {"1", "true", "yes"}
+    if hard_delete:
+        path, item = find_inbox_file_any_status(item_id)
+        if not item:
+            return jsonify({"error": "Inbox item not found"}), 404
+        path.unlink()
+        return jsonify({"deleted": True, "id": item_id, "path": workspace_relative_path(path)})
+
     path, item = find_pending_inbox_file(item_id)
     if not item:
         return jsonify({"error": "Pending inbox item not found"}), 404

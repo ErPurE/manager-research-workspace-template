@@ -84,15 +84,15 @@
 
 ## API Agent 能处理什么
 
-当前 API Agent 不是只能生成任务 JSON。它的设计目标是处理 Dashboard 缓存区里的多种内容：
+当前 API Agent 不是只能生成任务 JSON。它可以按 Dashboard 缓存类型生成不同的安全 action：
 
-- `task`：生成或更新 `tasks/todo.json`，目前测试最充分。
-- `guidance`：可写入 `guidance/` 并同步索引或任务。
-- `idea`：可写入 `notes/ideas/`。
-- `note` / `freeform`：可按内容写入 `notes/`、`research/` 或其他允许目录。
+- `task`：用 `upsert_todo` 生成或更新 `tasks/todo.json`。
+- `idea`：用 `write_idea` 写入 `notes/ideas/`；“可以试试 / maybe / possible” 这类 speculative idea 不会自动变成 todo。
+- `guidance`：用 `write_guidance` 写入 `guidance/`；只有明确行动项才额外同步任务。
+- `note` / `freeform`：用 `write_note` 写入 `notes/` 或 `research/`；只有明显是任务时才写 todo。
 - `file_edit_review`：可检查前端编辑后是否需要同步索引、任务或 handoff。
 
-需要注意：当前版本对 `task` 的细粒度动作 `upsert_todo` 最成熟；其他类型依赖模型返回 `write_text`、`replace_text`、`process_inbox` 等 action，使用时建议先看预览再应用。低价 API 输出不稳定时，应由 Codex/Claude Code 人工接管。
+所有 API Agent 输出都先进入预览。你确认后，本地后端才会按白名单路径应用。测试条目可以在缓存区用“删除记录”从 runtime 历史中移除，不会删除已经归档到正式目录的内容。
 
 ## 数据边界
 
