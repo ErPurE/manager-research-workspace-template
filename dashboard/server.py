@@ -654,7 +654,7 @@ Prefer granular actions such as upsert_todo. Do not use replace_json for tasks/t
 Route by each cache item's kind first. Do not turn every input into a todo.
 
 Allowed action types:
-- upsert_todo: {{"type":"upsert_todo","item":{{"title":"...","area":"research|admin|personal","group":"today|week|later|backlog|admin","status":"todo","priority":1,"note":"...","tags":[],"checklist":[]}}}}
+- upsert_todo: {{"type":"upsert_todo","item":{{"id":"existing-id-if-updating","title":"...","area":"research|admin|personal","group":"today|week|later|backlog|admin","status":"todo","priority":1,"note":"...","tags":[],"checklist":[]}}}}
 - write_idea: {{"type":"write_idea","title":"...","content":"markdown body","tags":["..."],"priority":"low|medium|high"}}
 - write_guidance: {{"type":"write_guidance","title":"...","content":"markdown body","source":"advisor|meeting|collaborator|other"}}
 - write_note: {{"type":"write_note","title":"...","content":"markdown body","folder":"notes|research"}}
@@ -676,6 +676,7 @@ Output schema:
 Important local rules:
 - tasks/todo.json is the only authoritative todo source.
 - Keep similar work merged into task packages where practical.
+- When a cache item extends an existing task package, keep the existing task id and send only newly needed checklist items; do not restate the whole checklist as a replacement.
 - For reimbursement, purchase, travel, forms, or administrative chores, use area "admin" and group "admin".
 - Always add process_inbox actions for cache items you handled.
 - kind=idea: preserve it as an idea with write_idea. Do not add upsert_todo for speculative language such as "可以试试", "maybe", "possible", or "idea". Add upsert_todo only when the item explicitly asks to schedule/execute work (for example "今天做", "本周完成", "帮我安排任务", "截止").
@@ -852,6 +853,83 @@ def normalize_checklist_entries(checklist):
     return entries
 
 
+def merge_unique_list(existing_values, incoming_values):
+    merged = []
+    seen = set()
+    for value in [*existing_values, *incoming_values]:
+        text = str(value).strip()
+        if text and text not in seen:
+            merged.append(text)
+            seen.add(text)
+    return merged
+
+
+def merge_todo_note(existing_note, incoming_note):
+    existing_text = str(existing_note or "").strip()
+    incoming_text = str(incoming_note or "").strip()
+    if not incoming_text or incoming_text in existing_text:
+        return existing_text
+    if not existing_text:
+        return incoming_text
+    if existing_text in incoming_text:
+        return incoming_text
+    return f"{existing_text}\n\n新增：{incoming_text}"
+
+
+def merge_checklist_entries(existing_checklist, incoming_checklist):
+    merged = normalize_checklist_entries(existing_checklist)
+    index_by_text = {entry["text"]: index for index, entry in enumerate(merged)}
+    for entry in normalize_checklist_entries(incoming_checklist):
+        text = entry["text"]
+        existing_index = index_by_text.get(text)
+        if existing_index is None:
+            index_by_text[text] = len(merged)
+            merged.append(entry)
+            continue
+        existing_entry = merged[existing_index]
+        if entry.get("done") and not existing_entry.get("done"):
+            existing_entry["done"] = True
+            existing_entry["updated_at"] = entry.get("updated_at") or now_iso()
+    return merged
+
+
+def should_update_todo_scalar(raw_item, key, value):
+    if key not in raw_item:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return value is not None
+
+
+def merge_existing_todo_for_agent(existing, item, raw_item):
+    merged = dict(existing)
+    for key in ("title", "area", "project", "group", "due_label", "due_date"):
+        if should_update_todo_scalar(raw_item, key, item.get(key)):
+            merged[key] = item[key]
+    if should_update_todo_scalar(raw_item, "status", item.get("status")):
+        incoming_status = item["status"]
+        existing_status = str(existing.get("status", "")).strip()
+        if incoming_status != "todo" or existing_status not in TODO_STATUS_VALUES:
+            merged["status"] = incoming_status
+    if should_update_todo_scalar(raw_item, "priority", item.get("priority")):
+        try:
+            existing_priority = int(existing.get("priority", 1))
+        except (TypeError, ValueError):
+            existing_priority = 1
+        merged["priority"] = max(existing_priority, item["priority"])
+    merged["id"] = str(existing.get("id") or item["id"]).strip()
+    created_at = existing.get("created_at") or item.get("created_at")
+    if created_at:
+        merged["created_at"] = created_at
+    else:
+        merged.pop("created_at", None)
+    merged["tags"] = merge_unique_list(normalize_tags(existing.get("tags", [])), item.get("tags", []))
+    merged["note"] = merge_todo_note(existing.get("note", ""), item.get("note", ""))
+    merged["checklist"] = merge_checklist_entries(existing.get("checklist", []), item.get("checklist", []))
+    merged["updated_at"] = now_iso()
+    return merged
+
+
 def upsert_todo_item(raw_item):
     item = normalize_todo_item_for_agent(raw_item)
     data = load_todo_data()
@@ -869,11 +947,10 @@ def upsert_todo_item(raw_item):
         items.append(item)
     else:
         existing = items[match_index]
-        item["created_at"] = existing.get("created_at", now_iso())
-        items[match_index] = {**existing, **item}
+        items[match_index] = merge_existing_todo_for_agent(existing, item, raw_item)
     data["items"] = items
     write_json_file(TODO_FILE, data)
-    return item["id"]
+    return items[match_index if match_index is not None else -1]["id"]
 
 
 def write_structured_markdown(folder, title, content, prefix_lines=None):
