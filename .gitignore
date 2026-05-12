@@ -9,5 +9,6 @@ venv/
 .agent/temp_search_results.json
 .agent/runtime/local_api_profiles.json
 .agent/runtime/agent_runs/
+.agent/runtime/inbox/**/*.json
 tmpclaude-*
 ~$*.xlsx
