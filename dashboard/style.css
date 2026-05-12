@@ -753,6 +753,33 @@ textarea:focus-visible {
     white-space: pre-wrap;
 }
 
+.app-update-panel {
+    grid-column: 1 / -1;
+}
+
+.app-info-grid {
+    display: grid;
+    grid-template-columns: minmax(110px, auto) minmax(0, 1fr);
+    gap: 10px 14px;
+    margin-bottom: 14px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.app-info-grid strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-primary);
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-update-output {
+    min-height: 150px;
+    max-height: 260px;
+}
+
 /* ===== File grid ===== */
 .file-grid {
     display: grid;

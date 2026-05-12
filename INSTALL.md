@@ -1,6 +1,16 @@
 # Installation
 
-## Local Install
+## Windows EXE Install
+
+1. Open the latest GitHub Release.
+2. Download `ManagerDashboard-windows-x64.zip`.
+3. Unzip it to a program folder, for example `C:\Tools\ManagerDashboard`.
+4. Run `ManagerDashboard.exe`.
+5. The Dashboard opens in your browser and stores user data in a separate workspace folder.
+
+Program updates replace only the Dashboard program files. They do not overwrite your workspace data, tasks, notes, guidance records, or API profiles.
+
+## Source / Portable Install
 
 1. Unzip the package.
 2. Move the folder anywhere you want to keep your research workspace.
@@ -20,3 +30,9 @@
 The Dashboard can store multiple API profiles locally. API keys are written to `.agent/runtime/local_api_profiles.json`, which is ignored by git.
 
 Use “测试连接” before processing real inbox items. Always review the generated preview before applying it.
+
+## Updates
+
+- Packaged public builds can check, download, and apply program updates from the Dashboard.
+- Source / private workspace mode disables automatic public release installation.
+- Workspace template or `.agent` rule migrations should be reviewed before applying; never replace a working research workspace blindly.

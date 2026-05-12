@@ -211,6 +211,27 @@
                     </div>
                     <pre class="agent-output" id="agent-run-output">先保存一个 API 配置，然后点击“生成预览”。预览确认后再应用到任务、指导记录和缓存状态。</pre>
                 </div>
+
+                <div class="workspace-panel app-update-panel">
+                    <div class="panel-header">
+                        <h2>软件更新</h2>
+                        <span class="status-pill" id="app-update-status">未检查</span>
+                    </div>
+                    <div class="app-info-grid">
+                        <span>当前版本</span>
+                        <strong id="app-version">-</strong>
+                        <span>运行模式</span>
+                        <strong id="app-mode">-</strong>
+                        <span>工作区</span>
+                        <strong id="app-workspace">-</strong>
+                    </div>
+                    <div class="form-actions">
+                        <button class="secondary-btn" id="app-check-update">检查更新</button>
+                        <button class="action-btn" id="app-download-update" disabled>下载更新</button>
+                        <button class="secondary-btn" id="app-apply-update" disabled>重启并更新</button>
+                    </div>
+                    <pre class="agent-output app-update-output" id="app-update-output">源码模式不会自动安装公共 release；打包版可在这里检查并应用程序更新。</pre>
+                </div>
             </div>
         </section>
         

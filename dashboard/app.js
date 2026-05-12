@@ -32,6 +32,7 @@ let inboxItemsById = new Map();
 let currentFile = null;
 let agentProfilesData = { active_profile_id: '', profiles: [] };
 let lastAgentRunId = '';
+let appUpdateState = { latest_version: '', downloaded_version: '' };
 
 // ===== 初始化 =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -39,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCaptureForm();
     initFileModal();
     initAgentPanel();
+    initAppPanel();
     const initialSection = getSectionFromHash();
     if (initialSection && document.getElementById(initialSection)) {
         showSection(initialSection);
@@ -82,6 +84,7 @@ function showSection(sectionId) {
             break;
         case 'agent':
             loadAgentProfiles();
+            loadAppInfo();
             break;
         case 'ideas':
             loadFiles('ideas', 'ideas-grid');
@@ -1162,6 +1165,123 @@ async function applyAgentPreview() {
 
 function setAgentStatus(id, message, tone = '') {
     const element = document.getElementById(id);
+    if (!element) {
+        return;
+    }
+    element.textContent = message;
+    element.className = `status-pill ${tone ? `is-${tone}` : ''}`.trim();
+}
+
+// ===== 软件更新 =====
+function initAppPanel() {
+    const checkButton = document.getElementById('app-check-update');
+    const downloadButton = document.getElementById('app-download-update');
+    const applyButton = document.getElementById('app-apply-update');
+    if (!checkButton) {
+        return;
+    }
+    checkButton.addEventListener('click', checkAppUpdate);
+    downloadButton.addEventListener('click', downloadAppUpdate);
+    applyButton.addEventListener('click', applyAppUpdate);
+    loadAppInfo();
+}
+
+async function loadAppInfo() {
+    try {
+        const response = await fetch(`${API_BASE}/api/app/info`);
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || '加载失败');
+        }
+        setText('app-version', data.version || '-');
+        setText('app-mode', `${data.packaged ? '打包版' : '源码模式'} · ${data.distribution || 'source'}`);
+        setText('app-workspace', data.workspace_root || '-');
+        setAppUpdateStatus(data.update_enabled ? '可检查更新' : '源码模式', data.update_enabled ? '' : 'warning');
+        document.getElementById('app-download-update').disabled = true;
+        document.getElementById('app-apply-update').disabled = true;
+        document.getElementById('app-update-output').textContent = data.update_enabled
+            ? '点击“检查更新”查看公共 release 中是否有新版程序。程序更新不会覆盖当前工作区。'
+            : '当前是源码/私人工作区模式，软件内自动安装公共 release 已禁用。';
+    } catch (error) {
+        setAppUpdateStatus(`加载失败：${error.message}`, 'warning');
+    }
+}
+
+async function checkAppUpdate() {
+    const output = document.getElementById('app-update-output');
+    try {
+        setAppUpdateStatus('检查中...');
+        output.textContent = '正在检查 GitHub Release...';
+        const response = await fetch(`${API_BASE}/api/app/update/check`, { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || '检查失败');
+        }
+        appUpdateState.latest_version = data.latest_version || '';
+        document.getElementById('app-download-update').disabled = !data.update_available;
+        document.getElementById('app-apply-update').disabled = true;
+        output.textContent = JSON.stringify(data, null, 2);
+        if (!data.enabled) {
+            setAppUpdateStatus('源码模式', 'warning');
+        } else if (data.update_available) {
+            setAppUpdateStatus(`发现 ${data.latest_version}`, 'success');
+        } else {
+            setAppUpdateStatus('已是最新', 'success');
+        }
+    } catch (error) {
+        output.textContent = `检查失败：${error.message}`;
+        setAppUpdateStatus('检查失败', 'warning');
+    }
+}
+
+async function downloadAppUpdate() {
+    const output = document.getElementById('app-update-output');
+    try {
+        setAppUpdateStatus('下载中...');
+        output.textContent = '正在下载并校验更新包...';
+        const response = await fetch(`${API_BASE}/api/app/update/download`, { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || '下载失败');
+        }
+        appUpdateState.downloaded_version = data.version || appUpdateState.latest_version;
+        document.getElementById('app-apply-update').disabled = !appUpdateState.downloaded_version;
+        output.textContent = JSON.stringify(data, null, 2);
+        setAppUpdateStatus('已下载', 'success');
+    } catch (error) {
+        output.textContent = `下载失败：${error.message}`;
+        setAppUpdateStatus('下载失败', 'warning');
+    }
+}
+
+async function applyAppUpdate() {
+    const output = document.getElementById('app-update-output');
+    if (!appUpdateState.downloaded_version) {
+        setAppUpdateStatus('没有可应用更新', 'warning');
+        return;
+    }
+    try {
+        setAppUpdateStatus('准备重启...');
+        output.textContent = '正在启动外部更新器。Dashboard 会关闭并自动重启。';
+        const response = await fetch(`${API_BASE}/api/app/update/apply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ version: appUpdateState.downloaded_version })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || '应用失败');
+        }
+        output.textContent = JSON.stringify(data, null, 2);
+        setAppUpdateStatus('正在重启', 'success');
+    } catch (error) {
+        output.textContent = `应用失败：${error.message}`;
+        setAppUpdateStatus('应用失败', 'warning');
+    }
+}
+
+function setAppUpdateStatus(message, tone = '') {
+    const element = document.getElementById('app-update-status');
     if (!element) {
         return;
     }

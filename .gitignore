@@ -5,10 +5,14 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
+build/
+dist/
+*.spec
 
 .agent/temp_search_results.json
 .agent/runtime/local_api_profiles.json
 .agent/runtime/agent_runs/
 .agent/runtime/inbox/**/*.json
+dashboard/version.json
 tmpclaude-*
 ~$*.xlsx

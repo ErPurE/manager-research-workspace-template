@@ -1,0 +1,70 @@
+{
+  "allow_files": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "INSTALL.md",
+    "README.md",
+    "requirements.txt",
+    "requirements-build.txt",
+    ".gitignore",
+    ".github/copilot-instructions.md",
+    ".github/workflows/publish-release.yml"
+  ],
+  "allow_dirs": [
+    "dashboard",
+    "tools",
+    ".agent/adapters",
+    ".agent/core",
+    ".agent/protocols",
+    ".agent/workflows"
+  ],
+  "deny_patterns": [
+    "tasks/*",
+    "guidance/*.md",
+    "research/*",
+    "notes/*",
+    ".agent/profile.md",
+    ".agent/memory/*",
+    ".agent/runtime/*",
+    "dashboard/__pycache__/*",
+    "dashboard/version.json",
+    "build/*",
+    "dist/*",
+    "*.pyc",
+    "*.pyo",
+    "*.spec"
+  ],
+  "sensitive_patterns": [
+    "魏纯可",
+    "可儿",
+    "上海科技",
+    "ShanghaiTech",
+    "陆老师",
+    "金威",
+    "管理员密码",
+    "hf[0-9]{6,}",
+    "sk-[A-Za-z0-9_-]{20,}",
+    "OPENAI_API_KEY\\s*=",
+    "ANTHROPIC_API_KEY\\s*=",
+    "B_rms",
+    "f_measure",
+    "Hx,y",
+    "pump-probe",
+    "动态成像",
+    "Overleaf补充",
+    "YIG球"
+  ],
+  "text_extensions": [
+    ".bat",
+    ".css",
+    ".html",
+    ".js",
+    ".json",
+    ".md",
+    ".ps1",
+    ".py",
+    ".txt",
+    ".yml",
+    ".yaml"
+  ]
+}

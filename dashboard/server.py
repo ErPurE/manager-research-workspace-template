@@ -4,21 +4,136 @@
 """
 
 from datetime import datetime
+import hashlib
 import http.client
 import json
 import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 import uuid
+import zipfile
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 
-app = Flask(__name__, static_folder=".", static_url_path="")
+APP_NAME = "ManagerDashboard"
+PUBLIC_RELEASE_REPO = "ErPurE/manager-research-workspace-template"
+
+
+def is_frozen_app():
+    return bool(getattr(sys, "frozen", False))
+
+
+def resolve_app_root():
+    if is_frozen_app():
+        return Path(getattr(sys, "_MEIPASS")) / "dashboard"
+    return Path(__file__).parent.resolve()
+
+
+def load_version_info(app_root):
+    version_file = app_root / "version.json"
+    default = {
+        "version": os.environ.get("MANAGER_DASHBOARD_VERSION", "2.4.0-dev"),
+        "distribution": os.environ.get("MANAGER_DASHBOARD_DISTRIBUTION", "source"),
+        "release_repo": os.environ.get("MANAGER_DASHBOARD_RELEASE_REPO", PUBLIC_RELEASE_REPO),
+    }
+    if not version_file.exists():
+        return default
+    try:
+        data = json.loads(version_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return default
+    return {
+        "version": str(data.get("version") or default["version"]),
+        "distribution": str(data.get("distribution") or default["distribution"]),
+        "release_repo": str(data.get("release_repo") or default["release_repo"]),
+    }
+
+
+def local_appdata_root():
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    if base:
+        return Path(base) / APP_NAME
+    return Path.home() / f".{APP_NAME}"
+
+
+def user_config_file():
+    return local_appdata_root() / "config.json"
+
+
+def load_user_config():
+    path = user_config_file()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_user_config(data):
+    path = user_config_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def command_line_workspace():
+    for index, arg in enumerate(sys.argv):
+        if arg == "--workspace" and index + 1 < len(sys.argv):
+            return sys.argv[index + 1]
+        if arg.startswith("--workspace="):
+            return arg.split("=", 1)[1]
+    return ""
+
+
+def resolve_workspace_root(app_root):
+    explicit = command_line_workspace() or os.environ.get("MANAGER_WORKSPACE", "")
+    if explicit:
+        workspace = Path(explicit).expanduser().resolve()
+    elif is_frozen_app():
+        config = load_user_config()
+        configured = str(config.get("workspace_root", "")).strip()
+        workspace = (
+            Path(configured).expanduser().resolve()
+            if configured
+            else (Path.home() / "Documents" / "ManagerWorkspace").resolve()
+        )
+    else:
+        workspace = app_root.parent.resolve()
+
+    if is_frozen_app():
+        config = load_user_config()
+        if config.get("workspace_root") != str(workspace):
+            config["workspace_root"] = str(workspace)
+            save_user_config(config)
+    return workspace
+
+
+def resolve_template_root(app_root):
+    if is_frozen_app():
+        return Path(getattr(sys, "_MEIPASS")) / "workspace_template"
+    return app_root.parent.resolve()
+
+
+APP_ROOT = resolve_app_root()
+VERSION_INFO = load_version_info(APP_ROOT)
+APP_VERSION = VERSION_INFO["version"]
+APP_DISTRIBUTION = VERSION_INFO["distribution"]
+RELEASE_REPO = VERSION_INFO["release_repo"]
+WORKSPACE_ROOT = resolve_workspace_root(APP_ROOT)
+TEMPLATE_ROOT = resolve_template_root(APP_ROOT)
+INSTALL_ROOT = Path(sys.executable).parent.resolve() if is_frozen_app() else APP_ROOT.parent.resolve()
+UPDATE_ROOT = local_appdata_root() / "updates"
+
+app = Flask(__name__, static_folder=str(APP_ROOT), static_url_path="")
 CORS(
     app,
     resources={
@@ -32,7 +147,6 @@ CORS(
 )
 
 # 工作区根目录
-WORKSPACE_ROOT = Path(__file__).parent.parent.resolve()
 INBOX_ROOT = WORKSPACE_ROOT / ".agent" / "runtime" / "inbox"
 PENDING_DIR = INBOX_ROOT / "pending"
 PROCESSED_DIR = INBOX_ROOT / "processed"
@@ -116,6 +230,36 @@ def now_iso():
 def ensure_runtime_dirs():
     for directory in (PENDING_DIR, PROCESSED_DIR, FAILED_DIR, CANCELLED_DIR, BACKUP_ROOT, AGENT_RUN_ROOT):
         directory.mkdir(parents=True, exist_ok=True)
+
+
+def copy_missing_tree(source, destination):
+    if not source.exists():
+        return
+    for item in source.rglob("*"):
+        if item.is_dir():
+            continue
+        relative = item.relative_to(source)
+        target = destination / relative
+        if target.exists():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item, target)
+
+
+def initialize_workspace_from_template():
+    if (WORKSPACE_ROOT / "tasks" / "todo.json").exists() and (WORKSPACE_ROOT / ".agent").exists():
+        return False
+
+    WORKSPACE_ROOT.mkdir(parents=True, exist_ok=True)
+    for directory_name in (".agent", "tasks", "guidance", "notes", "research"):
+        copy_missing_tree(TEMPLATE_ROOT / directory_name, WORKSPACE_ROOT / directory_name)
+    for file_name in ("README.md", "INSTALL.md", "AGENTS.md", "CLAUDE.md"):
+        source = TEMPLATE_ROOT / file_name
+        target = WORKSPACE_ROOT / file_name
+        if source.exists() and not target.exists():
+            shutil.copy2(source, target)
+    ensure_runtime_dirs()
+    return True
 
 
 def atomic_write_text(path, content):
@@ -1071,10 +1215,245 @@ def load_agent_run(run_id):
         raise ValueError("Agent run not found")
     return read_json_file(path, {})
 
+
+def app_update_enabled():
+    if os.environ.get("MANAGER_DASHBOARD_ENABLE_UPDATE") == "1":
+        return True
+    return is_frozen_app() and APP_DISTRIBUTION == "public"
+
+
+def parse_version_parts(value):
+    cleaned = str(value or "").strip().lower()
+    cleaned = cleaned.removeprefix("manager-template-").removeprefix("v")
+    parts = []
+    for chunk in re.split(r"[^0-9]+", cleaned):
+        if chunk:
+            parts.append(int(chunk))
+    return parts or [0]
+
+
+def version_is_newer(candidate, current):
+    left = parse_version_parts(candidate)
+    right = parse_version_parts(current)
+    width = max(len(left), len(right))
+    left.extend([0] * (width - len(left)))
+    right.extend([0] * (width - len(right)))
+    return left > right
+
+
+def github_json(url):
+    request_obj = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": f"{APP_NAME}/{APP_VERSION}",
+        },
+    )
+    with urllib.request.urlopen(request_obj, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def download_url(url, destination):
+    request_obj = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with urllib.request.urlopen(request_obj, timeout=120) as response:
+        with destination.open("wb") as handle:
+            shutil.copyfileobj(response, handle)
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def latest_release_info():
+    release = github_json(f"https://api.github.com/repos/{RELEASE_REPO}/releases/latest")
+    assets = release.get("assets", [])
+    app_asset = next((asset for asset in assets if asset.get("name") == "ManagerDashboard-windows-x64.zip"), None)
+    sha_asset = next((asset for asset in assets if asset.get("name") == "ManagerDashboard-windows-x64.zip.sha256"), None)
+    return {
+        "tag_name": release.get("tag_name", ""),
+        "name": release.get("name", ""),
+        "html_url": release.get("html_url", ""),
+        "published_at": release.get("published_at", ""),
+        "version": str(release.get("tag_name", "")).replace("manager-template-v", ""),
+        "app_asset": app_asset,
+        "sha_asset": sha_asset,
+    }
+
+
+def updater_script_content():
+    return r'''
+param(
+  [Parameter(Mandatory=$true)][int]$ProcessId,
+  [Parameter(Mandatory=$true)][string]$ZipPath,
+  [Parameter(Mandatory=$true)][string]$InstallDir,
+  [Parameter(Mandatory=$true)][string]$WorkspaceRoot,
+  [Parameter(Mandatory=$true)][string]$BackupDir
+)
+
+$ErrorActionPreference = "Stop"
+Wait-Process -Id $ProcessId -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+
+$stage = Join-Path ([System.IO.Path]::GetTempPath()) ("ManagerDashboardUpdate-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Force -Path $stage | Out-Null
+Expand-Archive -LiteralPath $ZipPath -DestinationPath $stage -Force
+
+$source = $stage
+$nested = Join-Path $stage "ManagerDashboard"
+if (Test-Path $nested) {
+  $source = $nested
+}
+
+New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
+$backupTarget = Join-Path $BackupDir ("app-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+Copy-Item -LiteralPath $InstallDir -Destination $backupTarget -Recurse -Force
+
+robocopy $source $InstallDir /MIR | Out-Null
+$exit = $LASTEXITCODE
+if ($exit -gt 7) {
+  throw "robocopy failed with exit code $exit"
+}
+
+$exe = Join-Path $InstallDir "ManagerDashboard.exe"
+Start-Process -FilePath $exe -ArgumentList @("--workspace", $WorkspaceRoot)
+Remove-Item -LiteralPath $stage -Recurse -Force
+'''.strip()
+
+
 @app.route('/')
 def index():
     """提供主页"""
-    return send_from_directory('.', 'index.html')
+    return send_from_directory(APP_ROOT, 'index.html')
+
+
+@app.route("/api/app/info")
+def app_info():
+    return jsonify(
+        {
+            "app_name": APP_NAME,
+            "version": APP_VERSION,
+            "distribution": APP_DISTRIBUTION,
+            "packaged": is_frozen_app(),
+            "update_enabled": app_update_enabled(),
+            "release_repo": RELEASE_REPO,
+            "workspace_root": str(WORKSPACE_ROOT),
+            "app_root": str(APP_ROOT),
+            "install_root": str(INSTALL_ROOT),
+        }
+    )
+
+
+@app.route("/api/app/update/check", methods=["POST"])
+def check_app_update():
+    if not app_update_enabled():
+        return jsonify(
+            {
+                "enabled": False,
+                "update_available": False,
+                "current_version": APP_VERSION,
+                "reason": "Updates are enabled only for packaged public builds.",
+            }
+        )
+    try:
+        release = latest_release_info()
+        has_assets = bool(release["app_asset"] and release["sha_asset"])
+        remote_version = release["version"]
+        update_available = has_assets and version_is_newer(remote_version, APP_VERSION)
+        return jsonify(
+            {
+                "enabled": True,
+                "current_version": APP_VERSION,
+                "latest_version": remote_version,
+                "tag_name": release["tag_name"],
+                "release_url": release["html_url"],
+                "published_at": release["published_at"],
+                "has_windows_asset": has_assets,
+                "update_available": update_available,
+            }
+        )
+    except Exception as error:
+        return jsonify({"enabled": True, "error": str(error)}), 500
+
+
+@app.route("/api/app/update/download", methods=["POST"])
+def download_app_update():
+    if not app_update_enabled():
+        return jsonify({"error": "Updates are enabled only for packaged public builds."}), 400
+    try:
+        release = latest_release_info()
+        if not release["app_asset"] or not release["sha_asset"]:
+            return jsonify({"error": "Release does not contain Windows update assets."}), 404
+        version = release["version"]
+        version_dir = UPDATE_ROOT / version
+        zip_path = version_dir / "ManagerDashboard-windows-x64.zip"
+        sha_path = version_dir / "ManagerDashboard-windows-x64.zip.sha256"
+        download_url(release["app_asset"]["browser_download_url"], zip_path)
+        download_url(release["sha_asset"]["browser_download_url"], sha_path)
+        expected_hash = sha_path.read_text(encoding="utf-8").split()[0].strip().lower()
+        actual_hash = sha256_file(zip_path).lower()
+        if expected_hash != actual_hash:
+            zip_path.unlink(missing_ok=True)
+            return jsonify({"error": "Downloaded update failed sha256 verification."}), 500
+        return jsonify(
+            {
+                "version": version,
+                "tag_name": release["tag_name"],
+                "zip_path": str(zip_path),
+                "sha256": actual_hash,
+                "ready_to_apply": True,
+            }
+        )
+    except Exception as error:
+        return jsonify({"error": str(error)}), 500
+
+
+@app.route("/api/app/update/apply", methods=["POST"])
+def apply_app_update():
+    if not app_update_enabled():
+        return jsonify({"error": "Updates are enabled only for packaged public builds."}), 400
+    payload = request.get_json(silent=True) or {}
+    version = str(payload.get("version", "")).strip()
+    if not version:
+        return jsonify({"error": "Version is required."}), 400
+    zip_path = UPDATE_ROOT / version / "ManagerDashboard-windows-x64.zip"
+    if not zip_path.exists():
+        return jsonify({"error": "Update package has not been downloaded."}), 404
+
+    script_path = UPDATE_ROOT / version / "apply-update.ps1"
+    script_path.write_text(updater_script_content(), encoding="utf-8")
+    backup_dir = local_appdata_root() / "backups"
+    command = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script_path),
+        "-ProcessId",
+        str(os.getpid()),
+        "-ZipPath",
+        str(zip_path),
+        "-InstallDir",
+        str(INSTALL_ROOT),
+        "-WorkspaceRoot",
+        str(WORKSPACE_ROOT),
+        "-BackupDir",
+        str(backup_dir),
+    ]
+    subprocess.Popen(command, close_fds=True)
+
+    def stop_current_process():
+        time.sleep(1)
+        os._exit(0)
+
+    threading.Thread(target=stop_current_process, daemon=True).start()
+    return jsonify({"applying": True, "version": version})
+
 
 @app.route('/api/ideas')
 def get_ideas():
@@ -1503,10 +1882,18 @@ def get_structure():
     }
     return jsonify(structure)
 
-if __name__ == '__main__':
+
+def prepare_runtime():
+    initialize_workspace_from_template()
     ensure_runtime_dirs()
-    print("🚀 科研管理仪表板启动中...")
-    print(f"📁 工作区: {WORKSPACE_ROOT}")
-    print("🌐 访问地址: http://127.0.0.1:5000")
+
+
+if __name__ == '__main__':
+    prepare_runtime()
+    port = int(os.environ.get("MANAGER_DASHBOARD_PORT", "5000"))
+    print("Manager dashboard starting...")
+    print(f"App: {APP_ROOT}")
+    print(f"Workspace: {WORKSPACE_ROOT}")
+    print(f"URL: http://127.0.0.1:{port}")
     print("按 Ctrl+C 停止服务器")
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=port, debug=not is_frozen_app(), use_reloader=not is_frozen_app())

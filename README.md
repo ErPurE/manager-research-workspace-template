@@ -15,11 +15,10 @@
 
 ## 快速开始
 
-1. 安装 Python 3.x。
-2. 运行 `dashboard/start.bat`。
-3. 浏览器打开 `http://127.0.0.1:5000`。
-4. 在 Dashboard 里开始录入任务、灵感、指导记录和笔记。
-5. 打开 `.agent/profile.md`，填入你自己的研究背景、写作偏好和协作习惯。
+1. 推荐：从 Release 下载 `ManagerDashboard-windows-x64.zip`，解压后运行 `ManagerDashboard.exe`。
+2. 源码方式：安装 Python 3.x，然后运行 `dashboard/start.bat`。
+3. 浏览器打开 Dashboard 后，开始录入任务、灵感、指导记录和笔记。
+4. 打开 `.agent/profile.md`，填入你自己的研究背景、写作偏好和协作习惯。
 
 ## 界面预览
 
@@ -102,6 +101,23 @@
 - `.agent/runtime/agent_runs/` 保存本地 API 调用记录，必须保持 untracked。
 - 不要把私人画像、真实科研记录、导师内容、任务列表或 API key 发布到公开仓库。
 
+## 软件更新
+
+- Windows EXE 版本会把程序和工作区分离：更新程序不会覆盖你的任务、笔记、指导记录或 API 配置。
+- Dashboard 的“软件更新”面板可以检查公共 Release、下载更新包并重启应用。
+- 源码/私人工作区模式不会自动安装公共 Release，以免覆盖本地开发或私人数据。
+- 工作区模板和 `.agent` 规则迁移应先预览，再由用户确认应用。
+
+## 私有改动同步到公共模板
+
+如果你在私人工作区里维护 Dashboard 或 Agent 框架代码，可以先运行 dry-run：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\sync_to_public.ps1
+```
+
+确认只包含框架文件后，再加 `-Apply`。同步工具带有 allowlist、denylist 和敏感词扫描，默认不会复制私人任务、画像、指导记录、研究内容或 API key。
+
 ## 验证命令
 
 ```powershell
@@ -120,9 +136,9 @@ You do not need to understand every file before using it. Open the Dashboard, ca
 
 ## Quick Start
 
-1. Install Python 3.x.
-2. Run `dashboard/start.bat`.
-3. Open `http://127.0.0.1:5000`.
+1. Recommended: download `ManagerDashboard-windows-x64.zip` from Releases, unzip it, and run `ManagerDashboard.exe`.
+2. Source mode: install Python 3.x and run `dashboard/start.bat`.
+3. Open the Dashboard in your browser.
 4. Start from the Dashboard.
 5. Fill `.agent/profile.md` with your own research background and collaboration preferences.
 
@@ -151,4 +167,4 @@ The screenshots above are captured from an empty template workspace, so they con
 
 This makes the repository useful not only as a research dashboard, but as a durable Agent workspace.
 
-Version: v2.0.0-template
+Version: v2.4.0-template
